@@ -1,0 +1,14 @@
+{
+  "name": "whatsapp-meta-groq-bot",
+  "version": "1.0.0",
+  "description": "WhatsApp Meta Cloud API Bot powered by Groq and notification bridge",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2"
+  }
+}

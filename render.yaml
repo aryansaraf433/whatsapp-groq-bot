@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: whatsapp-groq-bot
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_MODEL
+        value: openai/gpt-oss-120b
+      - key: PHONE_NUMBER_ID
+        sync: false
+      - key: WHATSAPP_TOKEN
+        sync: false
+      - key: VERIFY_TOKEN
+        value: antigravity_secret_token_123
+      - key: MY_PHONE_NUMBER
+        value: 917067176901
