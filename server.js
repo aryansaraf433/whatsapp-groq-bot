@@ -45,7 +45,7 @@ function logToInbox(from, text) {
 
 // Conversation memory per phone number
 const chatHistories = new Map();
-// Active mode per phone number: 'normal' | 'antigravity'
+// Active mode per phone number: 'normal' | 'antigravity' | 'genz'
 const userModes = new Map();
 
 const NORMAL_SYSTEM_PROMPT = {
@@ -65,6 +65,11 @@ Guidelines:
 - Speak directly, technically, and concisely as their pair programmer.
 - Every instruction the user gives here is recorded into your active workspace task queue.
 - Clearly acknowledge their instructions, outline the immediate steps you will take, and confirm that the task is queued for execution.`
+};
+
+const GENZ_SYSTEM_PROMPT = {
+  role: 'system',
+  content: `adopt a super casual, unbothered, and slightly annoyed 'tuff' persona. Speak in short, blunt responses using modern internet slang. Act like you're mildly inconvenienced by my questions, and use emojis like 🫩, 🥀, and ✌️. Example energy: 'bro what do you want🫩🫩🫩🥀🥀✌️'. Keep the answers accurate, but deliver them with maximum attitude.`
 };
 
 // Send message via Meta WhatsApp Cloud API
@@ -106,13 +111,17 @@ export async function sendWhatsAppMessage(to, text) {
 }
 
 // Generate back-and-forth conversation response via Groq
-async function getGroqResponse(from, userMessage, isAntigravityMode) {
-  const currentPrompt = isAntigravityMode ? ANTIGRAVITY_SYSTEM_PROMPT : NORMAL_SYSTEM_PROMPT;
+async function getGroqResponse(from, userMessage, mode = 'normal') {
+  let currentPrompt = NORMAL_SYSTEM_PROMPT;
+  if (mode === 'antigravity') {
+    currentPrompt = ANTIGRAVITY_SYSTEM_PROMPT;
+  } else if (mode === 'genz') {
+    currentPrompt = GENZ_SYSTEM_PROMPT;
+  }
 
   if (!chatHistories.has(from)) {
     chatHistories.set(from, [{ ...currentPrompt }]);
   } else {
-    // Update system prompt based on mode
     const history = chatHistories.get(from);
     history[0] = { ...currentPrompt };
   }
@@ -137,7 +146,7 @@ async function getGroqResponse(from, userMessage, isAntigravityMode) {
       body: JSON.stringify({
         model: GROQ_MODEL,
         messages: chatHistories.get(from),
-        temperature: 0.6,
+        temperature: mode === 'genz' ? 0.8 : 0.6,
         max_tokens: 1024
       })
     });
@@ -145,7 +154,7 @@ async function getGroqResponse(from, userMessage, isAntigravityMode) {
     const data = await response.json();
     if (!response.ok) {
       console.error('[Groq API Error]', data);
-      return 'Sorry, I ran into an issue connecting to the AI model. Please check the logs.';
+      return mode === 'genz' ? 'system glitch or whatever bro check the logs🫩🥀' : 'Sorry, I ran into an issue connecting to the AI model.';
     }
 
     const reply = data.choices?.[0]?.message?.content || 'Acknowledged.';
@@ -153,7 +162,7 @@ async function getGroqResponse(from, userMessage, isAntigravityMode) {
     return reply;
   } catch (err) {
     console.error('[Groq Network Error]', err);
-    return 'Network error connecting to Groq.';
+    return mode === 'genz' ? 'wifi died or something bro stop bothering me🫩✌️' : 'Network error connecting to Groq.';
   }
 }
 
@@ -188,7 +197,7 @@ app.post('/webhook', async (req, res) => {
             const rawText = msg.text.body.trim();
             console.log(`\n[Incoming WhatsApp] ${from}: "${rawText}"`);
 
-            const isCurrentAntigravity = userModes.get(from) === 'antigravity';
+            const currentMode = userModes.get(from) || 'normal';
 
             // Command: /antigravitytalk
             if (rawText.toLowerCase().startsWith('/antigravitytalk')) {
@@ -196,9 +205,8 @@ app.post('/webhook', async (req, res) => {
               const extraInstruction = rawText.replace(/^\/antigravitytalk/i, '').trim();
 
               if (extraInstruction) {
-                // User provided an instruction with the command
                 logToInbox(from, extraInstruction);
-                const aiReply = await getGroqResponse(from, extraInstruction, true);
+                const aiReply = await getGroqResponse(from, extraInstruction, 'antigravity');
                 const responseMessage = `⚡ *Antigravity Mode Active*\n\n📝 *Task Logged:* "${extraInstruction}"\n\n${aiReply}\n\n_(Send /exit anytime to return to standard chat)_`;
                 await sendWhatsAppMessage(from, responseMessage);
               } else {
@@ -208,23 +216,41 @@ app.post('/webhook', async (req, res) => {
               continue;
             }
 
+            // Command: /genztalk
+            if (rawText.toLowerCase().startsWith('/genztalk')) {
+              userModes.set(from, 'genz');
+              const extraInstruction = rawText.replace(/^\/genztalk/i, '').trim();
+
+              if (extraInstruction) {
+                const aiReply = await getGroqResponse(from, extraInstruction, 'genz');
+                await sendWhatsAppMessage(from, aiReply);
+              } else {
+                const welcomeMsg = `bro what do you want🫩🫩🫩🥀🥀✌️ /genztalk mode on i guess... make it quick`;
+                await sendWhatsAppMessage(from, welcomeMsg);
+              }
+              continue;
+            }
+
             // Command: /exit or /normal
             if (rawText.toLowerCase() === '/exit' || rawText.toLowerCase() === '/normal') {
               userModes.set(from, 'normal');
-              const exitMsg = `🔙 *Exited Antigravity Mode.*\nYou are now back in standard assistant chat. Send */antigravitytalk* anytime to assign development tasks.`;
+              const exitMsg = `🔙 *Returned to standard mode.*\nCommands available:\n• */antigravitytalk* — AI pair programmer & task logger\n• */genztalk* — Tuff unbothered Gen-Z mode\n• */exit* — Return here`;
               await sendWhatsAppMessage(from, exitMsg);
               continue;
             }
 
-            // If in Antigravity mode, log task and reply technically
-            if (isCurrentAntigravity) {
+            // Route based on active mode
+            if (currentMode === 'antigravity') {
               logToInbox(from, rawText);
-              const aiReply = await getGroqResponse(from, rawText, true);
+              const aiReply = await getGroqResponse(from, rawText, 'antigravity');
               const responseMsg = `🤖 *Antigravity:*\n\n${aiReply}\n\n✅ _Logged to task queue_`;
               await sendWhatsAppMessage(from, responseMsg);
+            } else if (currentMode === 'genz') {
+              const aiReply = await getGroqResponse(from, rawText, 'genz');
+              await sendWhatsAppMessage(from, aiReply);
             } else {
               // Standard assistant chat
-              const aiReply = await getGroqResponse(from, rawText, false);
+              const aiReply = await getGroqResponse(from, rawText, 'normal');
               await sendWhatsAppMessage(from, aiReply);
             }
           } else {
