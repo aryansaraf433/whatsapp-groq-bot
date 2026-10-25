@@ -13,10 +13,10 @@ services:
       - key: GROQ_MODEL
         value: openai/gpt-oss-120b
       - key: PHONE_NUMBER_ID
-        sync: false
+        value: "1363072673556179"
       - key: WHATSAPP_TOKEN
         sync: false
       - key: VERIFY_TOKEN
         value: antigravity_secret_token_123
       - key: MY_PHONE_NUMBER
-        value: 917067176901
+        value: "917067176901"
